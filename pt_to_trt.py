@@ -14,8 +14,9 @@ def get_resnet_model(checkpoint, layers):
     else:
         raise ValueError(f"Invalid number of layers passed as argument -- {layers}")
 
-def convert32(input_model, layers, fp16_mode, output_path):
-    
+def convert32(input_model, layers):
+
+    # May need to change how we load the model for TorchScripts
     checkpoint = torch.load(input_model)
     model = get_resnet_model(checkpoint, layers)
     num_features = model.fc.in_features
@@ -32,20 +33,21 @@ def convert32(input_model, layers, fp16_mode, output_path):
 
     print("Converting to TensorRT...", end="")
     sys.stdout.flush()
-    if fp16_mode == True:
-        print("<enabling fp16 mode>...", end="")
-        sys.stdout.flush()
-    model_trt = torch2trt.torch2trt(model,[x], fp16_mode=fp16_mode)
-    print("Complete!")
+    model_trt_16 = torch2trt.torch2trt(model,[x], fp16_mode=True)
+    torch.save(model_trt_16.state_dict(), "resnet18_trt_16.pth")
+    print("<fp16> model saved...")
+    sys.stdout.flush()
+   # model.load_state_dict(checkpoint['model_state_dict'], strict=False)
+   # model_trt_32 = torch2trt.torch2trt(model, [x])
+   # torch.save(model_trt_32.state_dict(), "resnet18_trt_32.pth")
+   # print("<fp32> model saved...Complete!")
+   # sys.stdout.flush()
 
-    torch.save(model_trt.state_dict(), output_path)
-    print("TensorRT model saved")
 
 def get_args():
     parser = argparse.ArgumentParser(
             prog="Pytorch to TensorRT Converter",
             description="Converts PyTorch Model to TensorRT Model." \
-                    " Include -fp16_mode flag to enable fp16_mode."
             )
     parser.add_argument(
         "--input_model", 
@@ -59,17 +61,17 @@ def get_args():
         required=True, 
         help="Number of layers in the ResNet model (e.g., 18 for ResNet18, 50 for ResNet50)."
     )
-    parser.add_argument(
-        "--output_path", 
-        default="trt_model.pth", 
-        type=pathlib.Path, 
-        help="Path to save the converted TensorRT model (default: trt_model.pth)."
-    )
-    parser.add_argument(
-        "-fp16_mode",
-        action="store_true",
-        help="Enable FP16 mode for the TensorRT conversion."
-    )
+    #parser.add_argument(
+    #    "--output_dir",
+    #    default="./",
+    #    type=pathlib.Path,
+    #    help="Path to save the converted TensorRT model (default: ./)."
+    #)
+    #parser.add_argument(
+    #    "-fp16_mode",
+    #    action="store_true",
+    #    help="Enable FP16 mode for the TensorRT conversion."
+    #)
     args = parser.parse_args()
     return args
 
@@ -77,6 +79,5 @@ if __name__ == "__main__":
     args = get_args()
     input_model = args.input_model
     layers = int(args.num_layers)
-    output_path = args.output_path
-    fp16_mode = args.fp16_mode
-    convert32(input_model, layers, fp16_mode, output_path)
+    #output_dir = args.output_dir
+    convert32(input_model, layers)
